@@ -1643,6 +1643,10 @@ const GRADEBOOK_URL = "https://claude.ai/artifact/Hgx6UHYt9i8DVHBwvgE6XR";
 const EXTRA_INSTRUCTORS = [];     // other instructors listed for students: { name, email }
 const MAIN_INSTRUCTOR = "stellarlifetech@gmail.com";
 const MAIN_INSTRUCTOR_NAME = "Dr. Joannes Paulus Tolentino Hernandez";
+const MAIN_LOGIN = "stellarlifetech@gmail.com";   // main instructor email shown in the gradebook
+const MAIN_ALIAS = "jphernandezrn@gmail.com";   // also accepted for the main instructor sign-in
+const loginKey = e => { const x = String(e||"").trim().toLowerCase(); return (x===MAIN_LOGIN || x===MAIN_ALIAS || x===MAIN_INSTRUCTOR) ? MAIN_INSTRUCTOR : x; };
+const shownEmail = e => String(e||"").trim().toLowerCase()===MAIN_INSTRUCTOR ? MAIN_LOGIN : e;
 function withMain(list){ return [{ name:MAIN_INSTRUCTOR_NAME, email:MAIN_INSTRUCTOR }, ...EXTRA_INSTRUCTORS, ...(list||[]).filter(d=>normEmail(d.email)!==MAIN_INSTRUCTOR)]; }
 let directory = [{ name:"Dr. Joannes Paulus Tolentino Hernandez", email:"stellarlifetech@gmail.com" }]; // registered instructors; main is always listed
 const MAX_ATTEMPTS = Infinity;
@@ -2614,12 +2618,12 @@ const normCode = c => String(c||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 async function setPassword(acc, pw, mustChange){ acc.salt = randHex(16); acc.hash = await pbkdf2(pw, acc.salt); acc.mustChange = !!mustChange; acc.pwSetAt = new Date().toISOString(); }
 async function setRecovery(acc){ const code = newCode(); acc.rsalt = randHex(16); acc.rhash = await pbkdf2(normCode(code), acc.rsalt); return code; }
 function showRecovery(acc, code, next){
-  page("Save your recovery code", `${acc.name} (${acc.email})`, `
+  page("Save your recovery code", `${acc.name} (${shownEmail(acc.email)})`, `
     <p>If you forget your password, you'll need this code to reset it. It is shown only now. Store it somewhere safe, such as a password manager.</p>
     <div class="rcode" aria-label="Recovery code">${esc(code)}</div>
     <div class="actions"><button class="btn ghost" id="rcDl">Download as a text file</button><button class="btn" id="rcOk">I've saved my code</button></div>
     <p class="note">Each recovery code works once. Resetting or changing your password gives you a new code.</p>`);
-  $("#rcDl").onclick = async () => { const txt = `Electronic health record (EHR) simulation instructor recovery code\r\nAccount: ${acc.email}\r\nCode: ${code}\r\nCreated: ${new Date().toLocaleString()}\r\n`; try{ const dl = await claude.use("downloads"); if(!dl) throw {code:"unavailable"}; await dl.save({ filename:"EHR-instructor-recovery-code.txt", data:new Blob([txt],{type:"text/plain"}) }); }catch(e){ if(e && e.code==="declined") return; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([txt],{type:"text/plain"})); a.download="EHR-instructor-recovery-code.txt"; a.textContent="Save the code file"; $("#rcDl").after(a); } };
+  $("#rcDl").onclick = async () => { const txt = `Electronic health record (EHR) simulation instructor recovery code\r\nAccount: ${shownEmail(acc.email)}\r\nCode: ${code}\r\nCreated: ${new Date().toLocaleString()}\r\n`; try{ const dl = await claude.use("downloads"); if(!dl) throw {code:"unavailable"}; await dl.save({ filename:"EHR-instructor-recovery-code.txt", data:new Blob([txt],{type:"text/plain"}) }); }catch(e){ if(e && e.code==="declined") return; const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([txt],{type:"text/plain"})); a.download="EHR-instructor-recovery-code.txt"; a.textContent="Save the code file"; $("#rcDl").after(a); } };
   $("#rcOk").onclick = next;
 }
 function renderForgot(){
@@ -2632,7 +2636,7 @@ function renderForgot(){
     <p class="note" style="margin-top:18px">No recovery code? Ask the main instructor to reset your password from the Instructors list in the gradebook. They'll give you a temporary password to change when you sign in.</p>${ownerNote}`);
   $("#fBack").onclick = () => renderInstructor();
   const ob = $("#ownReset"); if(ob) ob.onclick = () => renderOwnerReset();
-  $("#ff").onsubmit = async e => { e.preventDefault(); const em = normEmail($("#fe").value), code = normCode($("#fc").value), p1=$("#f1").value, p2=$("#f2").value;
+  $("#ff").onsubmit = async e => { e.preventDefault(); const em = loginKey($("#fe").value), code = normCode($("#fc").value), p1=$("#f1").value, p2=$("#f2").value;
     if(p1.length<10){ $("#fErr").textContent="Use at least 10 characters."; return; } if(p1!==p2){ $("#fErr").textContent="The passwords don't match."; return; }
     try{ await loadAccounts(); const acc = accounts.find(a=>a.email===em);
       if(!acc || !acc.rhash || await pbkdf2(code, acc.rsalt)!==acc.rhash){ $("#fErr").textContent = "That email and recovery code don't match."; return; }
@@ -2641,19 +2645,19 @@ function renderForgot(){
     catch(err){ $("#fErr").textContent = "Couldn't reset the password in this view."; } };
 }
 function renderOwnerReset(){
-  page("Reset the main instructor password", `${MAIN_INSTRUCTOR_NAME} (${MAIN_INSTRUCTOR})`, `<form id="of" class="lockpanel" novalidate>${pwFields("o1","o2")}<div class="err" id="oErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Reset password</button><button class="btn ghost" type="button" id="oBack">Cancel</button></div></form>`);
+  page("Reset the main instructor password", `${MAIN_INSTRUCTOR_NAME} (${MAIN_LOGIN})`, `<form id="of" class="lockpanel" novalidate>${pwFields("o1","o2")}<div class="err" id="oErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Reset password</button><button class="btn ghost" type="button" id="oBack">Cancel</button></div></form>`);
   $("#oBack").onclick = () => renderForgot();
   $("#of").onsubmit = async e => { e.preventDefault(); const p1=$("#o1").value, p2=$("#o2").value; if(p1.length<10){ $("#oErr").textContent="Use at least 10 characters."; return; } if(p1!==p2){ $("#oErr").textContent="The passwords don't match."; return; }
     try{ await loadAccounts(); const acc = accounts.find(a=>a.main); await setPassword(acc, p1, false); const nc = await setRecovery(acc); await saveAccounts(); session = { email:acc.email, name:acc.name, isMain:true }; showRecovery(acc, nc, renderGradebook); }
     catch(err){ $("#oErr").textContent = "Couldn't reset the password."; } };
 }
 function renderMustChange(acc){
-  page("Choose a new password", `${acc.name} (${acc.email})`, `<p>You signed in with a temporary password. Choose your own password to continue.</p><form id="nf" class="lockpanel" novalidate>${pwFields("n1","n2")}<div class="err" id="nErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Save password</button></div></form>`);
+  page("Choose a new password", `${acc.name} (${shownEmail(acc.email)})`, `<p>You signed in with a temporary password. Choose your own password to continue.</p><form id="nf" class="lockpanel" novalidate>${pwFields("n1","n2")}<div class="err" id="nErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Save password</button></div></form>`);
   $("#nf").onsubmit = async e => { e.preventDefault(); const p1=$("#n1").value, p2=$("#n2").value; if(p1.length<10){ $("#nErr").textContent="Use at least 10 characters."; return; } if(p1!==p2){ $("#nErr").textContent="The passwords don't match."; return; }
     try{ await loadAccounts(); const a = accounts.find(x=>x.email===acc.email); await setPassword(a, p1, false); const nc = await setRecovery(a); await saveAccounts(); session = { email:a.email, name:a.name, isMain:!!a.main }; showRecovery(a, nc, renderGradebook); }
     catch(err){ $("#nErr").textContent = "Couldn't save the password."; } };
 }
-async function renderInstructor(){ if(GRADEBOOK) return renderInstructorShare(); return renderInstructorPw(); }
+async function renderInstructor(){ return renderInstructorPw(); }
 let booted = false;
 async function renderInstructorShare(){
   if(session) return renderGradebook();
@@ -2687,28 +2691,31 @@ function drawInstructorsShare(){
   box.querySelectorAll("[data-unl]").forEach(b => { let armed=false; b.onclick = async () => { if(!session.isMain) return; if(!armed){ armed=true; b.textContent="Confirm remove"; return; } try{ await loadAccounts(); accounts = accounts.filter(a=>a.uid!==b.dataset.unl); await saveAccounts(); if(gbFilter!=="all" && !accounts.some(a=>a.email===gbFilter)) gbFilter="all"; renderGradebook(); }catch(err){ b.textContent="Couldn't remove"; } }; });
 }
 async function renderInstructorPw(){
-  if(mode==="db" && !isAdmin){ page("Instructor gradebook","", `<p>Instructors need Editor access to this page to see student scores. Ask the main instructor (${esc(MAIN_INSTRUCTOR)}) to add you as an instructor here and share the page with your Claude account as an Editor.</p>`); return; }
   if(session) return renderGradebook();
+  if(GRADEBOOK && !booted){ page("Instructor gradebook", "", `<p class="note">Loading the gradebook…</p>`); return; }
+  if(mode==="db" && !isAdmin){ page("Instructor sign-in","", `<p>This gradebook is for instructors only. Ask the main instructor, ${esc(MAIN_INSTRUCTOR_NAME)}, to create your instructor account and share this page with you as an Editor.</p>`); return; }
   try{ await loadAccounts(); }catch(e){ page("Instructor gradebook","", `<p>Couldn't load instructor accounts in this view.</p>`); return; }
-  const main = accounts.find(a=>a.main);
+  const main = accounts.find(a=>a.main && a.hash);
+  if(!main && mode==="db" && !(me && me.isOwner)){ page("Instructor sign-in", "", `<p>The gradebook isn't set up yet. The main instructor, ${esc(MAIN_INSTRUCTOR_NAME)}, must open it first and create the main instructor password.</p>`); return; }
   if(!main){
     page("Set up the main instructor account", "This account can see every student and manage instructors.", `<form id="mf" class="lockpanel" novalidate>
       <label for="mn" class="flabel">Main instructor name</label><input id="mn" type="text" value="${esc(MAIN_INSTRUCTOR_NAME)}" readonly>
-      <label for="me2" class="flabel">Main instructor email</label><input id="me2" type="email" value="${esc(MAIN_INSTRUCTOR)}" readonly>
+      <label for="me2" class="flabel">Main instructor email</label><input id="me2" type="email" autocomplete="username" placeholder="Email">
       ${pwFields("p1","p2")}<div class="err" id="mErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Create account and open gradebook</button></div></form>`);
-    $("#mf").onsubmit = async e => { e.preventDefault(); const name=$("#mn").value.trim(), p1=$("#p1").value, p2=$("#p2").value;
+    $("#mf").onsubmit = async e => { e.preventDefault(); const name=$("#mn").value.trim(), p1=$("#p1").value, p2=$("#p2").value; if(loginKey($("#me2").value)!==MAIN_INSTRUCTOR){ $("#mErr").textContent="Enter the main instructor email."; return; }
       if(!name){ $("#mErr").textContent="Enter your name."; return; } if(p1.length<10){ $("#mErr").textContent="Use at least 10 characters."; return; } if(p1!==p2){ $("#mErr").textContent="The passwords don't match."; return; }
-      try{ const acc = { email:MAIN_INSTRUCTOR, name, main:true, addedBy:MAIN_INSTRUCTOR, addedAt:new Date().toISOString() }; await setPassword(acc, p1, false); const code = await setRecovery(acc); accounts = [acc]; await saveAccounts(); session = { email:MAIN_INSTRUCTOR, name, isMain:true }; showRecovery(acc, code, renderGradebook); }
+      try{ await loadAccounts(); const old = accounts.find(a=>a.main) || {}; const acc = { ...old, email:MAIN_INSTRUCTOR, name, main:true, addedBy:MAIN_INSTRUCTOR, addedAt:old.addedAt||new Date().toISOString() }; await setPassword(acc, p1, false); const code = await setRecovery(acc); accounts = [acc, ...accounts.filter(a=>!a.main)]; await saveAccounts(); session = { email:MAIN_INSTRUCTOR, name, isMain:true }; showRecovery(acc, code, renderGradebook); }
       catch(err){ $("#mErr").textContent = "Couldn't save the account. Make sure you have Editor access."; } };
     return;
   }
-  page("Instructor sign-in", "Sign in with the email and password your instructor account was created with.", `<form id="lf" class="lockpanel" novalidate>
-    <label for="le" class="flabel">Instructor email</label><input id="le" type="email" autocomplete="username">
+  page("Instructor sign-in", `Sign in with your instructor email and password. Main instructor: ${MAIN_INSTRUCTOR_NAME}.`, `<form id="lf" class="lockpanel" novalidate>
+    <label for="le" class="flabel">Email</label><input id="le" type="email" autocomplete="username">
     <label for="pw" class="flabel">Password</label><input id="pw" type="password" autocomplete="current-password">
     <div class="err" id="lErr" role="alert"></div><div class="actions"><button class="btn" type="submit">Sign in</button><button class="btn ghost" type="button" id="forgot">Forgot password?</button></div></form>`);
   $("#forgot").onclick = renderForgot;
   $("#le").focus();
-  $("#lf").onsubmit = async e => { e.preventDefault(); const em = normEmail($("#le").value); const acc = accounts.find(a=>a.email===em);
+  $("#lf").onsubmit = async e => { e.preventDefault(); const em = loginKey($("#le").value); try{ await loadAccounts(); }catch(err){} const acc = accounts.find(a=>normEmail(a.email)===em);
+    if(acc && !acc.hash){ $("#lErr").textContent = "This instructor account has no password yet. Ask the main instructor to reset your password from the Instructors list; you'll get a temporary password."; return; }
     try{ if(acc && await pbkdf2($("#pw").value, acc.salt)===acc.hash){ if(acc.mustChange) return renderMustChange(acc); session = { email:acc.email, name:acc.name, isMain:!!acc.main }; renderGradebook(); } else $("#lErr").textContent = "That email and password don't match an instructor account."; }
     catch(err){ $("#lErr").textContent = "Couldn't check the password in this view."; } };
 }
@@ -2740,12 +2747,12 @@ async function drawClassOutcomes(rows){ const box = $("#clsOut"); box.innerHTML 
   const tbl = (title, k, share) => { const base = outcomeSummary({})[k]; return `<h4>${title}</h4><div class="tablewrap"><table><thead><tr><th>Outcome</th>${share?"<th>Share of test</th>":""}<th>Class mean</th><th>Level</th>${LEVELS.map(([l])=>`<th>${l}</th>`).join("")}</tr></thead><tbody>${base.map((o,i)=>{ const v = sums.map(s=>s[k][i].pct).filter(x=>x!=null); const m = v.length?round1(v.reduce((a,b)=>a+b,0)/v.length):null; return `<tr><td>${esc(o.name)}</td>${share?`<td>${esc(o.range)}</td>`:""}<td class="num">${m??"—"}%</td><td>${levelOf(m)}</td>${LEVELS.map(([l])=>`<td class="num">${v.filter(x=>levelOf(x)===l).length}</td>`).join("")}</tr>`; }).join("")}</tbody></table></div>`; };
   box.innerHTML = `<p class="note">${sums.length} student${sums.length===1?"":"s"} with finished attempts. Each student's percent uses the average of their finished attempts; the level columns count students at each level.</p>${tbl("QSEN competencies","qsen")}${tbl("NCLEX-RN Client Needs","rn",true)}${tbl("NCLEX-PN Client Needs","pn",true)}${tbl("Clinical judgment steps","cj")}`; }
 function renderGradebook(){
-  const filt = session.isMain ? `<label class="note" style="display:flex;gap:8px;align-items:center">Show<select id="gbF" style="width:auto"><option value="all">All students</option>${accounts.map(a=>`<option value="${esc(a.email)}" ${gbFilter===a.email?"selected":""}>${esc(a.name)} (${esc(a.email)})</option>`).join("")}<option value="none" ${gbFilter==="none"?"selected":""}>No instructor listed</option></select></label>` : "";
-  page("Instructor gradebook", `Signed in as ${session.name} (${session.email})${session.isMain?", main instructor":""}`, `
+  const filt = session.isMain ? `<label class="note" style="display:flex;gap:8px;align-items:center">Show<select id="gbF" style="width:auto"><option value="all">All students</option>${accounts.map(a=>`<option value="${esc(a.email)}" ${gbFilter===a.email?"selected":""}>${esc(a.name)} (${esc(shownEmail(a.email))})</option>`).join("")}<option value="none" ${gbFilter==="none"?"selected":""}>No instructor listed</option></select></label>` : "";
+  page("Instructor gradebook", `Signed in as ${session.name} (${shownEmail(session.email)})${session.isMain?", main instructor":""}`, `
     <p class="note">${session.isMain?"As the main instructor you can see every student. Use Show to narrow the list to one instructor's class.":"You see only students who named you as their instructor."}</p>
     <div class="actions" style="margin:0 0 14px">${filt}<button class="btn" id="csvBtn">Download scores (CSV)</button><button class="btn" id="ocsvBtn">Download outcomes mapping (CSV)</button>
       <label class="btn ghost" style="cursor:pointer">Import student reports<input type="file" id="imp" accept=".pdf,application/pdf,.html,text/html" multiple hidden></label>
-      ${GRADEBOOK?"":`<button class="btn ghost" id="lockBtn">Sign out</button>`}</div>
+      <button class="btn ghost" id="lockBtn" type="button">Sign out</button></div>
     ${GRADEBOOK?`<p class="note">Students send you their PDF reports. Select <strong>Import student reports</strong> to add them; they stay in this gradebook for every instructor who can see them. Learners whose downloads are blocked submit a results card instead; paste it under <strong>Import a learner's results card</strong>.</p>`:""}
     <details class="chart-card vfbox" id="vfBox"><summary><strong>Verify a report (for instructors)</strong></summary>
       <p class="note" style="margin-top:10px">Paste the verification line from page 1 of a learner's PDF report. It starts with V1 and ends with a code like EHR-XXXXX-XXXXX.</p>
@@ -2768,7 +2775,7 @@ function renderGradebook(){
   const f = $("#gbF"); if(f) f.onchange = e => { gbFilter = e.target.value; drawGb(); $("#gbDetail").innerHTML=""; };
   $("#csvBtn").onclick = exportCsv;
   $("#ocsvBtn").onclick = exportOutcomesCsv;
-  const lb = $("#lockBtn"); if(lb) lb.onclick = () => { session = null; gbFilter = "all"; route(); };
+  const lb = $("#lockBtn"); if(lb) lb.onclick = () => { session = null; gbFilter = "all"; if(gbUnsub){ try{ gbUnsub(); }catch(e){} gbUnsub = null; } gbCloud = []; route(); };
   $("#imp").onchange = importReports;
   $("#vfBtn").onclick = runVerify;
   $("#gxBtn").onclick = gbImportTransfer;
@@ -2790,11 +2797,11 @@ async function runVerify(){
 }
 function canAddInstructors(list){ const me = (list||accounts).find(a=>a.email===session.email); return !!(me && (me.main || me.admin)); }
 function roleOf(a){ return a.main ? "Main" : a.admin ? "Admin" : "Instructor"; }
-function drawInstructors(){ if(GRADEBOOK) return drawInstructorsShare(); return drawInstructorsPw(); }
+function drawInstructors(){ return drawInstructorsPw(); }
 function drawInstructorsPw(){
   const box = $("#insBox"); if(!box) return;
   const mayAdd = canAddInstructors();
-  box.innerHTML = `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Added by</th><th></th></tr></thead><tbody>${accounts.map(a=>`<tr><td>${esc(a.name)}</td><td><span class="pill">${roleOf(a)}</span></td><td>${esc(a.email)}</td><td>${esc(a.addedBy||"")}${a.addedAt?`<div class="note">${esc(fmt(a.addedAt))}</div>`:""}</td><td><div class="insact">${session.isMain && !a.main?`<button class="btn ghost" data-adm="${esc(a.email)}">${a.admin?"Remove admin":"Make admin"}</button> <button class="btn ghost" data-rs="${esc(a.email)}">Reset password</button> <button class="btn ghost" data-rm="${esc(a.email)}">Remove</button>`:""}${a.email===session.email?`<button class="btn ghost" data-rc="1">New recovery code</button>`:""}</div></td></tr>`).join("")}</tbody></table></div>
+  box.innerHTML = `<div class="tablewrap"><table><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Added by</th><th></th></tr></thead><tbody>${accounts.map(a=>`<tr><td>${esc(a.name)}</td><td><span class="pill">${roleOf(a)}</span></td><td>${esc(shownEmail(a.email))}</td><td>${esc(shownEmail(a.addedBy||""))}${a.addedAt?`<div class="note">${esc(fmt(a.addedAt))}</div>`:""}</td><td><div class="insact">${session.isMain && !a.main?`<button class="btn ghost" data-adm="${esc(a.email)}">${a.admin?"Remove admin":"Make admin"}</button> <button class="btn ghost" data-rs="${esc(a.email)}">Reset password</button> <button class="btn ghost" data-rm="${esc(a.email)}">Remove</button>`:""}${a.email===session.email?`<button class="btn ghost" data-rc="1">New recovery code</button>`:""}</div></td></tr>`).join("")}</tbody></table></div>
   <p class="note">Roles: the <strong>Main</strong> instructor sees every class and manages instructors. An <strong>Admin</strong> can also add instructors. An <strong>Instructor</strong> sees only their own students and can't add instructors. Only the main instructor can make or remove admins, reset passwords, or remove instructors.</p>
   ${mayAdd?`<h3>Add an instructor</h3>
   <p class="note">New instructors start with the Instructor role. Share their sign-in email and temporary password with them privately. They'll choose their own password and get a recovery code the first time they sign in. They also need this page shared with their Claude account as an Editor to see scores.</p>
@@ -2804,7 +2811,7 @@ function drawInstructorsPw(){
   <form id="cf" class="lockpanel" novalidate>${pwFields("c1","c2")}<div class="err" id="cErr" role="alert"></div><div class="actions"><button class="btn ghost" type="submit">Change password</button></div></form>`;
   const af = $("#af"); if(af) af.onsubmit = async e => { e.preventDefault(); const name=$("#an").value.trim(), em=normEmail($("#ae").value), pw=$("#ap").value;
     if(!name){ $("#aErr").textContent="Enter the instructor's name."; return; } if(!validEmail(em)){ $("#aErr").textContent="Enter a valid email address."; return; }
-    if(accounts.some(a=>a.email===em)){ $("#aErr").textContent="That email already has an instructor account."; return; } if(pw.length<10){ $("#aErr").textContent="Use a temporary password of at least 10 characters."; return; }
+    if(em===MAIN_LOGIN || em===MAIN_ALIAS || em===MAIN_INSTRUCTOR || accounts.some(a=>a.email===em)){ $("#aErr").textContent="That email already has an instructor account."; return; } if(pw.length<10){ $("#aErr").textContent="Use a temporary password of at least 10 characters."; return; }
     try{ await loadAccounts(); if(!canAddInstructors()){ $("#aErr").textContent="Your role can't add instructors. Ask the main instructor."; drawInstructors(); return; } if(accounts.some(a=>a.email===em)){ $("#aErr").textContent="That email already has an instructor account."; return; }
       const acc = { email:em, name, main:false, admin:false, addedBy:session.email, addedAt:new Date().toISOString() }; await setPassword(acc, pw, true); accounts.push(acc); await saveAccounts(); drawInstructors(); renderGradebook(); }
     catch(err){ $("#aErr").textContent="Couldn't add the instructor."; } };
@@ -2827,7 +2834,7 @@ function drawGb(){
   if(!rows.length){ if(mode==="db" && gbUnsub) box.innerHTML = GRADEBOOK ? `<p>No students to show yet. Students appear here after you import their PDF reports${session.isMain&&gbFilter==="all"?"":" (only reports from students who named you as their instructor)"}.</p>` : `<p>No students to show yet. Students appear here after they complete the information form and name ${session.isMain&&gbFilter==="all"?"an instructor":"you as their instructor"}.</p>`; else if(mode!=="db") box.innerHTML = `<p class="note">Import student reports to build the gradebook.</p>`; return; }
   const cell = (a, r) => a ? (a.completedAt ? `${a.total||0}<div class="note">${esc(fmt(a.completedAt))}</div>` : `—<div class="note">${r.finalizedAt?"not counted":"in progress"}</div>`) : (r.finalizedAt ? `<span class="note">not taken</span>` : "—");
   const showIns = session.isMain;
-  box.innerHTML = `<div class="tablewrap"><table><thead><tr><th>Student</th><th>Student ID</th><th>Email</th><th>Course code and title / section</th>${showIns?"<th>Instructor</th>":""}<th>Attempt 1</th><th>Attempt 2</th><th>Attempt 3</th><th>Average</th><th>Level</th><th>Source</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="gb-row" data-i="${i}" tabindex="0"><td>${esc(r.student.lastName)}, ${esc(r.student.firstName)}</td><td>${esc(r.student.studentId)}</td><td>${esc(r.student.email)}</td><td>${esc(r.student.course)} / ${esc(r.student.section)}</td>${showIns?`<td>${r.student.instructorEmail?`${esc(r.student.instructorName)}<div class="note">${esc(r.student.instructorEmail)}</div>`:'<span class="note">Not listed</span>'}</td>`:""}${[0,1,2].map(k=>`<td class="num">${cell(r.attempts[k], r)}</td>`).join("")}<td class="num"><strong>${r.average??"—"}</strong>${r.average!=null?`<div class="note">${Math.round(r.average/TOTAL*100)}%${r.finalizedAt?", submitted as final":(r.attempts||[]).filter(a=>a.completedAt).length===3?", final":""}</div>`:""}</td><td>${(()=>{ const lv = levelOf(finalPct(r.attempts)); return lv?`<span class="pill">${lv}</span>${isFinalState(r)?"":'<div class="note">so far</div>'}`:"—"; })()}</td><td>${esc(r.source)}</td></tr>`).join("")}</tbody></table></div><p class="note">${rows.length} student${rows.length===1?"":"s"}. Select a student for task scores, documentation, and their report.</p>`;
+  box.innerHTML = `<div class="tablewrap"><table><thead><tr><th>Student</th><th>Student ID</th><th>Email</th><th>Course code and title / section</th>${showIns?"<th>Instructor</th>":""}<th>Attempt 1</th><th>Attempt 2</th><th>Attempt 3</th><th>Average</th><th>Level</th><th>Source</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="gb-row" data-i="${i}" tabindex="0"><td>${esc(r.student.lastName)}, ${esc(r.student.firstName)}</td><td>${esc(r.student.studentId)}</td><td>${esc(r.student.email)}</td><td>${esc(r.student.course)} / ${esc(r.student.section)}</td>${showIns?`<td>${r.student.instructorEmail?`${esc(r.student.instructorName)}<div class="note">${esc(shownEmail(r.student.instructorEmail))}</div>`:'<span class="note">Not listed</span>'}</td>`:""}${[0,1,2].map(k=>`<td class="num">${cell(r.attempts[k], r)}</td>`).join("")}<td class="num"><strong>${r.average??"—"}</strong>${r.average!=null?`<div class="note">${Math.round(r.average/TOTAL*100)}%${r.finalizedAt?", submitted as final":(r.attempts||[]).filter(a=>a.completedAt).length===3?", final":""}</div>`:""}</td><td>${(()=>{ const lv = levelOf(finalPct(r.attempts)); return lv?`<span class="pill">${lv}</span>${isFinalState(r)?"":'<div class="note">so far</div>'}`:"—"; })()}</td><td>${esc(r.source)}</td></tr>`).join("")}</tbody></table></div><p class="note">${rows.length} student${rows.length===1?"":"s"}. Select a student for task scores, documentation, and their report.</p>`;
   box.onclick = e => { const r = e.target.closest("[data-i]"); if(r) drawDetail(rows[+r.dataset.i]); };
   box.onkeydown = e => { if(e.key==="Enter"){ const r = e.target.closest("[data-i]"); if(r) drawDetail(rows[+r.dataset.i]); } };
 }
